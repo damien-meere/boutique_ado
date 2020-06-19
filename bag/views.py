@@ -10,8 +10,9 @@ def view_bag(request):
 
 def add_to_bag(request, item_id):
     """ Add a quantity of the specified product to the shopping bag """
-    quantity = request.POST.get('quantity')
+    quantity = int(request.POST.get('quantity'))
     redirect_url = request.POST.get('redirect_url')
+
     # the contents of the shopping 'bag' will persist within the HTTP session
     # maintained between the cliet browser and the django server itself
     bag = request.session.get('bag', {})
@@ -27,5 +28,4 @@ def add_to_bag(request, item_id):
 
     # overwrite the bag variable in the session with the updated version
     request.session['bag'] = bag
-    print(request.session['bag'])
     return redirect(redirect_url)
