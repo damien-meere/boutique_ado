@@ -1,4 +1,4 @@
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, reverse, HttpResponse
 
 # Create your views here.
 
@@ -46,3 +46,58 @@ def add_to_bag(request, item_id):
     # overwrite the bag variable in the session with the updated version
     request.session['bag'] = bag
     return redirect(redirect_url)
+
+
+def adjust_bag(request, item_id):
+    """ Adjust the quantity of the specified product to the requisite amount """
+
+    quantity = int(request.POST.get('quantity'))
+    size = None
+    if 'product_size' in request.POST:
+        size = request.POST['product_size']
+    # the contents of the shopping 'bag' will persist within the HTTP session
+    # maintained between the cliet browser and the django server itself
+    bag = request.session.get('bag', {})
+
+    # If there's a size, we'll need to drill into the items_by_size dictionary,
+    # find that specific size and either set its quantity
+    # to the updated one or remove it if the quantity submitted is zero.
+    if size:
+        if quantity > 0:
+            bag[item_id]['items_by_size'][size] = quantity
+        else:
+            del bag[item_id]['items_by_size'][size]
+            if not bag[item_id]['items_by_size']:
+                bag.pop(item_id)
+    else:
+        if quantity > 0:
+            bag[item_id] = quantity
+        else:
+            bag.pop(item_id)
+
+    # overwrite the bag variable in the session with the updated version
+    request.session['bag'] = bag
+    return redirect(reverse('view_bag'))
+
+
+def remove_from_bag(request, item_id):
+    """ Remove an item from the shopping bag """
+
+    try:
+        size = None
+        if 'product_size' in request.POST:
+            size = request.POST['product_size']
+        bag = request.session.get('bag', {})
+
+        if size:
+            del bag[item_id]['items_by_size'][size]
+            if not bag[item_id]['items_by_size']:
+                bag.pop(item_id)
+        else:
+            bag.pop(item_id)
+
+        # overwrite the bag variable in the session with the updated version
+        request.session['bag'] = bag
+        return HttpResponse(status=200)
+    except Exception as e:
+        return HttpResponse(status=500)
