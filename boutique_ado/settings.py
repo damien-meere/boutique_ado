@@ -45,7 +45,6 @@ INSTALLED_APPS = [
     'products',
     'bag',
     'checkout',
-
     # Other
     'crispy_forms',
 ]
@@ -78,12 +77,13 @@ TEMPLATES = [
                 'django.template.context_processors.request', # required by allauth
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'django.template.context_processors.media',
                 'bag.contexts.bag_contents', # this addition means that anytime we need to access the bag contents in any template across the entire site they'll be available to us
             ],
             # This will give us access to everything we need from crispy forms across all templates by default.
-            'builtins':[
+            'builtins': [
                 'crispy_forms.templatetags.crispy_forms_tags',
-                'crispy_forms.templatetags.crispy_forms_fields',
+                'crispy_forms.templatetags.crispy_forms_field',
             ]
         },
     },
