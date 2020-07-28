@@ -31,17 +31,17 @@ var card = elements.create('card', {style: style});
 card.mount('#card-element');
 
 //handle realtime validation errors on cards
-card.addEventListener('change', function(event){
-    var errorDiv  =document.getElementById('card-errors')
-    if(event.error){
+card.addEventListener('change', function (event) {
+    var errorDiv = document.getElementById('card-errors');
+    if (event.error) {
         var html = `
-            <span class="icon" role ="alert">
-                <i class = "fas fa-times"></i>
+            <span class="icon" role="alert">
+                <i class="fas fa-times"></i>
             </span>
             <span>${event.error.message}</span>
         `;
-        $(errorDiv).html(html)
-    }else {
+        $(errorDiv).html(html);
+    } else {
         errorDiv.textContent = '';
     }
 });
@@ -60,33 +60,77 @@ form.addEventListener('submit', function(ev) {
     $('#payment-form').fadeToggle(100);
     $('#loading-overlay').fadeToggle(100);
 
-    // Provide the card to stripe
-    stripe.confirmCardPayment(clientSecret, {
-        payment_method: {
-            card: card,
-        }
-    // then execute this function on the result.
-    }).then(function(result) {
-        if (result.error) {
-            var errorDiv = document.getElementById('card-errors');
-            var html = `
-                <span class="icon" role="alert">
-                <i class="fas fa-times"></i>
-                </span>
-                <span>${result.error.message}</span>`;
-            $(errorDiv).html(html);
-            // on completion show forma nd hide loading overlay
-            $('#payment-form').fadeToggle(100);
-            $('#loading-overlay').fadeToggle(100);
+    // If the user has selected the save infor box
+    var saveInfo = Boolean($('#id-save-info').attr('checked'));
+    // From using {% csrf_token %} in the form
+    var csrfToken = $('input[name="csrfmiddlewaretoken"]').val();
+    var postData = {
+        'csrfmiddlewaretoken': csrfToken,
+        'client_secret': clientSecret,
+        'save_info': saveInfo,
+    };
+    var url = '/checkout/cache_checkout_data/';
 
-            // After providing error notification, reenable card and submit button
-            card.update({ 'disabled': false});
-            $('#submit-button').attr('disabled', false);
-        // If status of the payment intent comes back as successful, Submit Form
-        } else {
-            if (result.paymentIntent.status === 'succeeded') {
-                form.submit();
+    print(url)
+    print(postdata)
+    //wait for a response that the payment intent was updated before calling the confirmed payment method
+    $.post(url, postData).done(function () {
+        // Provide the card to stripe
+        stripe.confirmCardPayment(clientSecret, {
+            payment_method: {
+                card: card,
+                billing_details: {
+                    name: $.trim(form.full_name.value),
+                    phone: $.trim(form.phone_number.value),
+                    email: $.trim(form.email.value),
+                    address:{
+                        line1: $.trim(form.street_address1.value),
+                        line2: $.trim(form.street_address2.value),
+                        city: $.trim(form.town_or_city.value),
+                        country: $.trim(form.country.value),
+                        state: $.trim(form.county.value),
+                    }
+                }
+            },
+            shipping: {
+                name: $.trim(form.full_name.value),
+                phone: $.trim(form.phone_number.value),
+                email: $.trim(form.email.value),
+                address:{
+                    line1: $.trim(form.street_address1.value),
+                    line2: $.trim(form.street_address2.value),
+                    city: $.trim(form.town_or_city.value),
+                    country: $.trim(form.country.value),
+                    post_code: $.trim(form.post_code.value),
+                    state: $.trim(form.county.value),
+                }
+            },
+        // then execute this function on the result.
+        }).then(function(result) {
+            if (result.error) {
+                var errorDiv = document.getElementById('card-errors');
+                var html = `
+                    <span class="icon" role="alert">
+                    <i class="fas fa-times"></i>
+                    </span>
+                    <span>${result.error.message}</span>`;
+                $(errorDiv).html(html);
+                // on completion show forma nd hide loading overlay
+                $('#payment-form').fadeToggle(100);
+                $('#loading-overlay').fadeToggle(100);
+                // After providing error notification, reenable card and submit button
+                card.update({ 'disabled': false});
+                $('#submit-button').attr('disabled', false);
+            // If status of the payment intent comes back as successful, Submit Form
+            } else {
+                if (result.paymentIntent.status === 'succeeded') {
+                    form.submit();
+                }
             }
-        }
-    });
+        });
+    }).fail(function () {
+        // triggered if our view sends a 400 bad request response. And in that case, we'll
+        // just reload the page to show the user the error message from the view.
+        location.reload();
+    })
 });
