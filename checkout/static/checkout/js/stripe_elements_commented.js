@@ -6,6 +6,8 @@
     https://stripe.com/docs/stripe-js
 */
 
+// slice off the first and last character on each since they'll have 
+// quotation marks which we don't want.
 var stripePublicKey = $('#id_stripe_public_key').text().slice(1, -1);
 var clientSecret = $('#id_client_secret').text().slice(1, -1);
 var stripe = Stripe(stripePublicKey);
@@ -28,7 +30,7 @@ var style = {
 var card = elements.create('card', {style: style});
 card.mount('#card-element');
 
-// Handle realtime validation errors on the card element
+//handle realtime validation errors on cards
 card.addEventListener('change', function (event) {
     var errorDiv = document.getElementById('card-errors');
     if (event.error) {
@@ -44,16 +46,21 @@ card.addEventListener('change', function (event) {
     }
 });
 
-// Handle form submit
+// Handle Form Submission
 var form = document.getElementById('payment-form');
 
 form.addEventListener('submit', function(ev) {
+    // Prevent defualt POST action
     ev.preventDefault();
+    // Instesd execute the following code
+    // Disable both the card element and the submit button to prevent multiple submissions.
     card.update({ 'disabled': true});
     $('#submit-button').attr('disabled', true);
+    // on submission, fade form and show loading overlay
     $('#payment-form').fadeToggle(100);
     $('#loading-overlay').fadeToggle(100);
 
+    // If the user has selected the save infor box
     var saveInfo = Boolean($('#id-save-info').attr('checked'));
     // From using {% csrf_token %} in the form
     var csrfToken = $('input[name="csrfmiddlewaretoken"]').val();
@@ -64,7 +71,11 @@ form.addEventListener('submit', function(ev) {
     };
     var url = '/checkout/cache_checkout_data/';
 
+    print(url)
+    print(postdata)
+    //wait for a response that the payment intent was updated before calling the confirmed payment method
     $.post(url, postData).done(function () {
+        // Provide the card to stripe
         stripe.confirmCardPayment(clientSecret, {
             payment_method: {
                 card: card,
@@ -84,15 +95,17 @@ form.addEventListener('submit', function(ev) {
             shipping: {
                 name: $.trim(form.full_name.value),
                 phone: $.trim(form.phone_number.value),
-                address: {
+                email: $.trim(form.email.value),
+                address:{
                     line1: $.trim(form.street_address1.value),
                     line2: $.trim(form.street_address2.value),
                     city: $.trim(form.town_or_city.value),
                     country: $.trim(form.country.value),
-                    postal_code: $.trim(form.postcode.value),
+                    post_code: $.trim(form.post_code.value),
                     state: $.trim(form.county.value),
                 }
             },
+        // then execute this function on the result.
         }).then(function(result) {
             if (result.error) {
                 var errorDiv = document.getElementById('card-errors');
@@ -102,10 +115,13 @@ form.addEventListener('submit', function(ev) {
                     </span>
                     <span>${result.error.message}</span>`;
                 $(errorDiv).html(html);
+                // on completion show forma nd hide loading overlay
                 $('#payment-form').fadeToggle(100);
                 $('#loading-overlay').fadeToggle(100);
+                // After providing error notification, reenable card and submit button
                 card.update({ 'disabled': false});
                 $('#submit-button').attr('disabled', false);
+            // If status of the payment intent comes back as successful, Submit Form
             } else {
                 if (result.paymentIntent.status === 'succeeded') {
                     form.submit();
@@ -113,7 +129,8 @@ form.addEventListener('submit', function(ev) {
             }
         });
     }).fail(function () {
-        // just reload the page, the error will be in django messages
+        // triggered if our view sends a 400 bad request response. And in that case, we'll
+        // just reload the page to show the user the error message from the view.
         location.reload();
     })
 });

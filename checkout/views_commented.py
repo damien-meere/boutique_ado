@@ -11,6 +11,8 @@ from bag.contexts import bag_contents
 import stripe
 import json
 
+
+# Determine whether the user had the save info box checked.
 @require_POST
 def cache_checkout_data(request):
     try:
@@ -23,8 +25,7 @@ def cache_checkout_data(request):
         })
         return HttpResponse(status=200)
     except Exception as e:
-        messages.error(request, 'Sorry, your payment cannot be \
-            processed right now. Please try again later.')
+        messages.error(request, 'Sorry, your payment cannot be processed right now. Please try again later.')
         return HttpResponse(content=e, status=400)
 
 
@@ -46,16 +47,16 @@ def checkout(request):
             'street_address2': request.POST['street_address2'],
             'county': request.POST['county'],
         }
+        # create an instance of the form using the form data
         order_form = OrderForm(form_data)
         if order_form.is_valid():
-            order = order_form.save(commit=False) #revent multiple save events from being executed on the database
-            pid = request.POST.get('client_secret').split('_secret')[0]
-            order.stripe_pid = pid
-            order.original_bag = json.dumps(bag)
-            order.save()
+            order = order_form.save()
             for item_id, item_data in bag.items():
                 try:
+                    # First we get the Product ID out of the bag.
                     product = Product.objects.get(id=item_id)
+                    # Then if its value is an integer we know we're working
+                    # with an item that doesn't have sizes
                     if isinstance(item_data, int):
                         order_line_item = OrderLineItem(
                             order=order,
@@ -63,6 +64,8 @@ def checkout(request):
                             quantity=item_data,
                         )
                         order_line_item.save()
+                    # working with an item with sizes, we'll iterate through
+                    # each size and create a line item accordingly
                     else:
                         for size, quantity in item_data['items_by_size'].items():
                             order_line_item = OrderLineItem(
@@ -72,6 +75,8 @@ def checkout(request):
                                 product_size=size,
                             )
                             order_line_item.save()
+                # if a Product doesn't exist, we provide an error message and
+                # delete the empty order
                 except Product.DoesNotExist:
                     messages.error(request, (
                         "One of the products in your bag wasn't found in our database. "
@@ -79,7 +84,7 @@ def checkout(request):
                     )
                     order.delete()
                     return redirect(reverse('view_bag'))
-
+            # Attach whether or not the user wanted to save their profile information to the session
             request.session['save_info'] = 'save-info' in request.POST
             return redirect(reverse('checkout_success', args=[order.order_number]))
         else:
@@ -87,8 +92,11 @@ def checkout(request):
                 Please double check your information.')
     else:
         bag = request.session.get('bag', {})
+        # If there's nothing in the bag just add a simple error message.
+        # And redirect back to the products page. This will prevent people
+        # from manually accessing the URL by typing /checkout
         if not bag:
-            messages.error(request, "There's nothing in your bag at the moment")
+            messages.error(request, "This is nothing in your bag")
             return redirect(reverse('products'))
 
         current_bag = bag_contents(request)
@@ -97,22 +105,20 @@ def checkout(request):
         stripe.api_key = stripe_secret_key
         intent = stripe.PaymentIntent.create(
             amount=stripe_total,
-            currency=settings.STRIPE_CURRENCY,
+            currency=settings.STRIPE_CURRENCY
         )
 
         order_form = OrderForm()
 
     if not stripe_public_key:
-        messages.warning(request, 'Stripe public key is missing. \
-            Did you forget to set it in your environment?')
-
+        messages.warning(request, 'Stripe public key is missing, \
+            did you forget to set this in the env vars?')
     template = 'checkout/checkout.html'
     context = {
         'order_form': order_form,
         'stripe_public_key': stripe_public_key,
         'client_secret': intent.client_secret,
     }
-
     return render(request, template, context)
 
 
@@ -125,13 +131,10 @@ def checkout_success(request, order_number):
     messages.success(request, f'Order successfully processed! \
         Your order number is {order_number}. A confirmation \
         email will be sent to {order.email}.')
-
     if 'bag' in request.session:
         del request.session['bag']
-
     template = 'checkout/checkout_success.html'
     context = {
         'order': order,
     }
-
     return render(request, template, context)
